@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { QuotationFilters } from "@/components/QuotationFilters";
@@ -16,7 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [quotations, setQuotations] = useState<Quotation[]>(quotationsData as Quotation[]);
+  const [loading, setLoading] = useState(true);
   const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -32,6 +36,27 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+
+  // Check authentication
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   // Save to localStorage whenever quotations change
   useEffect(() => {
@@ -210,6 +235,17 @@ const Index = () => {
     };
     return new Date(2000 + parseInt(year), monthMap[month], parseInt(day));
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20 flex flex-col">
