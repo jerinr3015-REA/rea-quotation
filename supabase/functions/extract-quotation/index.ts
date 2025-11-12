@@ -13,12 +13,16 @@ serve(async (req) => {
   try {
     const { imageData } = await req.json();
     
+    if (!imageData) {
+      throw new Error("No image data provided");
+    }
+    
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log('Extracting quotation data from image...');
+    console.log('Extracting quotation data from document...', imageData.substring(0, 50));
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -27,14 +31,14 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Extract all quotation details from this image. Return a JSON object with these exact fields:
+                text: `You are a quotation data extraction expert. Carefully analyze this image or PDF document and extract all quotation details. Return ONLY a valid JSON object with these exact fields:
 {
   "QUOTATION NO": "quotation number",
   "QUOTATION DATE": "date in DD/MM/YYYY format",
@@ -50,7 +54,12 @@ serve(async (req) => {
   "STATUS": "INVOICED, PENDING, or REGRET"
 }
 
-If any field is not found, use empty string. For numeric fields, extract only the number without currency symbols.`
+Important instructions:
+- If any field is not found in the document, use an empty string ("")
+- For numeric fields (QTY, UNIT COST, TOTAL AMOUNT), extract only the number without currency symbols (₹, $, etc.)
+- For dates, use DD/MM/YYYY format
+- Look carefully at all text in the document, including headers, tables, and fine print
+- Return ONLY valid JSON, no markdown formatting or extra text`
               },
               {
                 type: "image_url",
@@ -67,7 +76,14 @@ If any field is not found, use empty string. For numeric fields, extract only th
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      
+      if (response.status === 429) {
+        throw new Error("Rate limit exceeded. Please try again in a moment.");
+      } else if (response.status === 402) {
+        throw new Error("AI credits exhausted. Please add credits to your workspace.");
+      }
+      
+      throw new Error(`AI gateway error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -80,13 +96,15 @@ If any field is not found, use empty string. For numeric fields, extract only th
     console.log('AI Response:', content);
 
     // Extract JSON from the response (it might be wrapped in markdown code blocks)
-    let jsonStr = content;
+    let jsonStr = content.trim();
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
-      jsonStr = jsonMatch[1];
+      jsonStr = jsonMatch[1].trim();
     }
 
+    console.log('Extracted JSON string:', jsonStr);
     const extractedData = JSON.parse(jsonStr);
+    console.log('Parsed data:', extractedData);
 
     return new Response(
       JSON.stringify({ success: true, data: extractedData }),
