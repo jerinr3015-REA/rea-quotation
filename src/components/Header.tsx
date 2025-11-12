@@ -1,7 +1,32 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 import reaLogo from "@/assets/rea-logo-icon.png";
 import animaLogo from "@/assets/anima-logo.jpeg";
 
 export const Header = () => {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
   return (
     <header className="relative bg-gradient-to-r from-brand-teal via-brand-blue to-brand-teal shadow-2xl overflow-hidden">
       {/* Decorative background pattern */}
@@ -42,7 +67,7 @@ export const Header = () => {
           </div>
 
           {/* Title Section */}
-          <div className="text-center md:text-right">
+          <div className="flex-1 text-center md:text-right">
             <h1 className="text-2xl md:text-4xl font-bold text-white tracking-wide drop-shadow-lg">
               REA QUOTATION TRACKER
             </h1>
@@ -55,6 +80,21 @@ export const Header = () => {
             </div>
             <p className="text-xs text-white/70 mt-1 italic">Technology with a Soul</p>
           </div>
+
+          {/* Sign Out Button */}
+          {user && (
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                onClick={handleSignOut}
+                variant="outline"
+                className="bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+              <p className="text-xs text-white/70">{user.email}</p>
+            </div>
+          )}
         </div>
       </div>
 
