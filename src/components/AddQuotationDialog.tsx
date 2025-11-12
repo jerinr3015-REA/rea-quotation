@@ -97,15 +97,43 @@ export const AddQuotationDialog = ({ onAdd }: AddQuotationDialogProps) => {
   };
 
   const extractQuotationData = async (file: File) => {
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload an image (JPG, PNG, WEBP) or PDF file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please upload a file smaller than 10MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsScanning(true);
     try {
+      console.log('Converting file to base64...', file.name, file.type);
       const base64Data = await convertFileToBase64(file);
       
+      console.log('Calling extract-quotation function...');
       const { data, error } = await supabase.functions.invoke('extract-quotation', {
         body: { imageData: base64Data }
       });
 
-      if (error) throw error;
+      console.log('Response:', data, error);
+
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
+      }
 
       if (data.success && data.data) {
         setFormData(data.data);
@@ -118,9 +146,10 @@ export const AddQuotationDialog = ({ onAdd }: AddQuotationDialogProps) => {
       }
     } catch (error) {
       console.error('Error extracting quotation:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to extract quotation data";
       toast({
-        title: "Error",
-        description: "Failed to extract quotation data. Please fill manually.",
+        title: "Extraction Failed",
+        description: errorMessage + " Please fill the form manually.",
         variant: "destructive",
       });
     } finally {
@@ -159,21 +188,21 @@ export const AddQuotationDialog = ({ onAdd }: AddQuotationDialogProps) => {
         </DialogHeader>
 
         <div className="flex gap-2 p-4 bg-muted rounded-lg">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleCameraCapture}
-            className="hidden"
-          />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleCameraCapture}
+              className="hidden"
+            />
           <Button
             type="button"
             variant="outline"
